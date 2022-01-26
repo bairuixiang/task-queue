@@ -1,16 +1,19 @@
 package com.bai.task.queue.configuration;
 
+import com.bai.task.queue.context.TaskExecuteContext;
+import com.bai.task.queue.policy.DelayedQueuePolicy;
 import com.bai.task.queue.policy.RedisTaskQueuePolicy;
 import com.bai.task.queue.policy.TaskQueueHandler;
 
 import org.redisson.Redisson;
 import org.redisson.config.Config;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
-import org.springframework.util.StringUtils;
+
+import java.util.concurrent.DelayQueue;
 
 /**
  * @author bairuixiang
@@ -21,21 +24,20 @@ import org.springframework.util.StringUtils;
 )
 public class TaskQueueAutoConfig {
 
-    @Value("${spring.redis.host:127.0.0.1}:${spring.redis.port:6379}")
-    private String redisAddress;
-
     private static final String REDIS_URL_PREFIX = "redis://";
 
+    /**
+     * redis
+     */
     @ConditionalOnProperty(name = "bai.task.queue.type", havingValue = "redis")
     @Bean
     public TaskQueueHandler redisTaskQueueHandler() {
-        RedisTaskQueuePolicy redisTaskQueuePolicy = new RedisTaskQueuePolicy();
-
-
         return new RedisTaskQueuePolicy();
     }
 
-
+    /**
+     * mysql
+     */
     @ConditionalOnProperty(name = "bai.task.queue.type", havingValue = "mysql")
     @Bean
     public TaskQueueHandler mysqlTaskQueueHandler() {
@@ -43,18 +45,26 @@ public class TaskQueueAutoConfig {
     }
 
 
+    /**
+     * 默认队列
+     */
     @ConditionalOnMissingBean(TaskQueueHandler.class)
     @Bean
     public TaskQueueHandler defaultTaskQueueHandler() {
-        return new RedisTaskQueuePolicy();
+        DelayedQueuePolicy delayedQueuePolicy = new DelayedQueuePolicy();
+        DelayQueue<TaskExecuteContext> taskExecuteContexts = new DelayQueue<>();
+        delayedQueuePolicy.setDelayQueue(taskExecuteContexts);
+        return delayedQueuePolicy;
     }
 
 
+    @ConditionalOnProperty(name = "bai.task.queue.type", havingValue = "redis")
     @ConditionalOnMissingBean(Redisson.class)
     @Bean
-    public Redisson redisson(){
+    public Redisson redisson(RedisProperties redisProperties){
         Config config = new Config();
-        config.useSingleServer().setAddress(REDIS_URL_PREFIX + redisAddress);
+        config.useSingleServer().setAddress(REDIS_URL_PREFIX + redisProperties.getHost()+":"+redisProperties.getPort());
+        config.useSingleServer().setPassword(redisProperties.getPassword());
         return (Redisson) Redisson.create(config);
     }
 

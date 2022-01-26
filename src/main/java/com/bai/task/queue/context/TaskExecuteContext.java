@@ -9,6 +9,8 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
 
 import java.net.PortUnreachableException;
+import java.util.concurrent.Delayed;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -19,7 +21,7 @@ import java.net.PortUnreachableException;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class TaskExecuteContext extends TaskContext {
+public class TaskExecuteContext extends TaskContext  {
     /**
      * 任务的bean class
      */
@@ -41,6 +43,10 @@ public class TaskExecuteContext extends TaskContext {
     private Class<?>[] parameterTypes;
 
 
+    /**
+     * 初始化任务对象
+     * @param point 切入点
+     */
     public TaskExecuteContext(ProceedingJoinPoint point) {
         MethodSignature methodSignature = (MethodSignature) point.getSignature();
         TaskQueue annotation = methodSignature.getMethod().getAnnotation(TaskQueue.class);

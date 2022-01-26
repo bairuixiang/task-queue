@@ -2,13 +2,21 @@ package com.bai.task.queue.consumer;
 
 import com.bai.task.queue.common.constant.TaskConstants;
 import com.bai.task.queue.configuration.TaskConfig;
+import com.bai.task.queue.configuration.ThreadPoolConfiguration;
 import com.bai.task.queue.context.TaskExecuteContext;
 import com.bai.task.queue.policy.TaskQueueHandler;
 import com.bai.task.queue.service.TaskExecutorService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
+import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author bairuixiang
@@ -16,7 +24,7 @@ import javax.annotation.Resource;
  */
 @Slf4j
 @Component
-public class TaskConsumer implements CommandLineRunner {
+public class TaskConsumer {
 
     @Resource
     private TaskQueueHandler taskQueueHandler;
@@ -25,17 +33,45 @@ public class TaskConsumer implements CommandLineRunner {
     private TaskConfig taskConfig;
 
     @Resource
+    private ThreadPoolConfiguration poolConfig;
+
+    @Resource
     private TaskExecutorService taskExecutorService;
 
-    @Override
-    public void run(String... args) throws Exception {
-        //初始化消费者
+    private ThreadPoolExecutor executor;
+
+    /**
+     * 初始化加载线程池
+     */
+    @PostConstruct
+    public void initThreadPool() throws InstantiationException, IllegalAccessException {
+        RejectedExecutionHandler rejectedExecutionHandler = poolConfig.getPolicy().newInstance();
+        executor = new ThreadPoolExecutor(
+                poolConfig.getCoreSize(),
+                poolConfig.getMaxSize(),
+                poolConfig.getKeepAliveTime(),
+                TimeUnit.SECONDS,
+                poolConfig.getQueue(), new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread thread = new Thread(r);
+                thread.setName(poolConfig.getThreadPoolName());
+                return thread;
+            }
+        }, rejectedExecutionHandler);
+        executor.execute(this::run);
+    }
+
+    /**
+     * 监听器
+     */
+    public void run() {
         while (true) {
             try {
-                TaskConstants.ASYNC_OPERATE_TYPE.set(true);
                 TaskExecuteContext take = taskQueueHandler.take(taskConfig.getQueueName());
-                log.info("获取到任务，开始执行 {}",take);
-                taskExecutorService.execute(take);
+                if (ObjectUtils.isNotEmpty(take)) {
+                    executor.execute(() -> taskExecutorService.execute(take));
+                }
             } catch (Exception e) {
                 log.error("队列执行异常", e);
             }

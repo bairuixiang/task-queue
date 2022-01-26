@@ -37,7 +37,7 @@ public class TaskQueueAspect {
             try {
                 return point.proceed();
             } catch (Throwable throwable) {
-               log.error("执行任务异常");
+               throw new RuntimeException("执行任务异常");
             }
         }
         TaskExecuteContext taskExecuteContext = new TaskExecuteContext(point);
